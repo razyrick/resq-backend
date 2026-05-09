@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Core\Request;
 use App\Models\Agency;
+use App\Models\Patient;
 use App\Core\RateLimiter;
 use App\Core\Auth;
 use Exception;
@@ -373,6 +374,192 @@ class AgencyController {
         ]
       ]);
 
+    } catch (Exception $e) {
+      http_response_code(500);
+      return json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+    }
+  }
+
+  public function getPatients(Request $request) {
+    $apiKey = $this->getApiKey($request);
+
+    if (empty($apiKey)) {
+      http_response_code(401);
+      return json_encode(['error' => 'API key is required']);
+    }
+
+    if (!RateLimiter::check($apiKey)) {
+      http_response_code(429);
+      return json_encode(['error' => 'Rate limit exceeded. Try again later.']);
+    }
+
+    $csrfToken = $request->getHeader('X-CSRF-Token');
+    if (empty($csrfToken)) {
+      http_response_code(403);
+      return json_encode(['error' => 'CSRF token is required']);
+    }
+
+    try {
+      $user = Agency::findByApiKey($apiKey);
+
+      if (!$user) {
+        http_response_code(404);
+        return json_encode(['error' => 'User not found']);
+      }
+
+      if ($user['csrf_token'] !== $csrfToken) {
+        http_response_code(403);
+        return json_encode(['error' => 'Invalid CSRF token']);
+      }
+
+      if ($user['status'] !== 'active') {
+        http_response_code(403);
+        return json_encode(['error' => 'Account is not active']);
+      }
+
+      $agencyId = trim((string) ($user['agency_id'] ?? ''));
+      if ($agencyId === '') {
+        http_response_code(400);
+        return json_encode(['error' => 'No agency is assigned to this account; patients cannot be listed.']);
+      }
+
+      $page = max(1, intval($request->getQuery('page', 1)));
+      $limit = max(1, min(100, intval($request->getQuery('limit', 20))));
+      $offset = ($page - 1) * $limit;
+
+      $status = $request->getQuery('status', '');
+      $search = $request->getQuery('search', '');
+
+      $rows = Patient::getByAgency(
+        $agencyId,
+        $limit,
+        $offset,
+        $status,
+        $search
+      );
+      $total = Patient::countByAgency($agencyId, $status, $search);
+      $totalPages = ceil($total / $limit);
+
+      $allPatients = Patient::countAll();
+      $meta = [
+        'your_agency_id' => $agencyId,
+        'patients_total_in_database' => $allPatients,
+        'rows_matching_your_agency' => $total,
+      ];
+      if ($total === 0 && $allPatients > 0) {
+        $meta['sample_agency_ids_in_patients_table'] = Patient::sampleDistinctAgencyIds(8);
+      }
+
+      return json_encode([
+        'success' => true,
+        'data' => $rows,
+        'meta' => $meta,
+        'pagination' => [
+          'current_page' => $page,
+          'per_page' => $limit,
+          'total_items' => $total,
+          'total_pages' => $totalPages,
+          'has_next' => $page < $totalPages,
+          'has_prev' => $page > 1,
+        ],
+        'filters' => [
+          'status' => $status,
+          'search' => $search,
+        ],
+      ]);
+    } catch (Exception $e) {
+      http_response_code(500);
+      return json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+    }
+  }
+
+  public function updatePatientStatus(Request $request) {
+    $apiKey = $this->getApiKey($request);
+
+    if (empty($apiKey)) {
+      http_response_code(401);
+      return json_encode(['error' => 'API key is required']);
+    }
+
+    if (!RateLimiter::check($apiKey)) {
+      http_response_code(429);
+      return json_encode(['error' => 'Rate limit exceeded. Try again later.']);
+    }
+
+    $csrfToken = $request->getHeader('X-CSRF-Token');
+    if (empty($csrfToken)) {
+      http_response_code(403);
+      return json_encode(['error' => 'CSRF token is required']);
+    }
+
+    try {
+      $user = Agency::findByApiKey($apiKey);
+
+      if (!$user) {
+        http_response_code(404);
+        return json_encode(['error' => 'User not found']);
+      }
+
+      if ($user['csrf_token'] !== $csrfToken) {
+        http_response_code(403);
+        return json_encode(['error' => 'Invalid CSRF token']);
+      }
+
+      if ($user['status'] !== 'active') {
+        http_response_code(403);
+        return json_encode(['error' => 'Account is not active']);
+      }
+
+      $agencyId = trim((string) ($user['agency_id'] ?? ''));
+      if ($agencyId === '') {
+        http_response_code(400);
+        return json_encode(['error' => 'No agency is assigned to this account.']);
+      }
+
+      $input = json_decode(file_get_contents('php://input'), true);
+
+      if (json_last_error() !== JSON_ERROR_NONE) {
+        http_response_code(400);
+        return json_encode(['error' => 'Invalid JSON input']);
+      }
+
+      $patientId = isset($input['patient_id']) ? trim((string)$input['patient_id']) : '';
+      $status = isset($input['status']) ? trim((string)$input['status']) : '';
+
+      if ($patientId === '' || $status === '') {
+        http_response_code(400);
+        return json_encode(['error' => 'patient_id and status are required']);
+      }
+
+      if ($status !== 'resolved') {
+        http_response_code(400);
+        return json_encode(['error' => 'status must be resolved']);
+      }
+
+      $existing = Patient::getRowForAgency($patientId, $agencyId);
+      if (!$existing) {
+        http_response_code(404);
+        return json_encode(['error' => 'Patient not found']);
+      }
+
+      if (($existing['status'] ?? '') !== 'ongoing') {
+        http_response_code(400);
+        return json_encode(['error' => 'Only ongoing patients can be resolved']);
+      }
+
+      if (!Patient::updateStatusForAgency($patientId, $agencyId, $status)) {
+        http_response_code(500);
+        return json_encode(['error' => 'Failed to update patient']);
+      }
+
+      return json_encode([
+        'success' => true,
+        'message' => 'Patient status updated',
+        'data' => [
+          'patient_id' => $patientId,
+          'status' => $status,
+        ],
+      ]);
     } catch (Exception $e) {
       http_response_code(500);
       return json_encode(['error' => 'Server error: ' . $e->getMessage()]);

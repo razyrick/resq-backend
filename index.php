@@ -78,6 +78,7 @@ $router->delete('/dispatcher/agency', [App\Controllers\DispatcherController::cla
 $router->get('/dispatcher/dashboard', [App\Controllers\DispatcherController::class, 'dashboardStats']);
 $router->get('/dispatcher/users', [App\Controllers\DispatcherController::class, 'getDispatcherUsers']);
 $router->put('/dispatcher/users', [App\Controllers\DispatcherController::class, 'updateDispatcherUserStatus']);
+$router->post('/dispatcher/patients', [App\Controllers\DispatcherController::class, 'createPatient']);
 // ====== DISPATCHER END ====== //
 
 // ====== AGENCY START ====== //
@@ -86,6 +87,8 @@ $router->put('/agency/profile', [App\Controllers\AgencyController::class, 'updat
 $router->get('/agency/agencies', [App\Controllers\AgencyController::class, 'getAgencies']);
 $router->get('/agency/reports', [App\Controllers\AgencyController::class, 'getIncidents']);
 $router->put('/agency/reports', [App\Controllers\AgencyController::class, 'updateIncidentStatus']);
+$router->get('/agency/patients', [App\Controllers\AgencyController::class, 'getPatients']);
+$router->put('/agency/patients', [App\Controllers\AgencyController::class, 'updatePatientStatus']);
 $router->get('/agency/dashboard', [App\Controllers\AgencyController::class, 'getDashboardStats']);
 // ====== AGENCY END ====== //
 

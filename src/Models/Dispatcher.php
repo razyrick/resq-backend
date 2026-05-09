@@ -240,6 +240,9 @@ class Dispatcher {
   public static function getAgencies($limit = 10, $offset = 0, $status = '', $search = '') {
     $db = Database::connect();
     
+    $lim = max(1, min(1000, (int) $limit));
+    $off = max(0, (int) $offset);
+
     $sql = "SELECT * FROM agency WHERE 1=1";
     $params = [];
     
@@ -262,9 +265,7 @@ class Dispatcher {
       $params[':search_address'] = $searchTerm;
     }
     
-    $sql .= " ORDER BY created_at DESC LIMIT :limit OFFSET :offset";
-    $params[':limit'] = $limit;
-    $params[':offset'] = $offset;
+    $sql .= " ORDER BY created_at DESC LIMIT {$lim} OFFSET {$off}";
     
     try {
       $stmt = $db->prepare($sql);
@@ -277,8 +278,6 @@ class Dispatcher {
         $stmt->bindParam(':search_email', $params[':search_email']);
         $stmt->bindParam(':search_address', $params[':search_address']);
       }
-      $stmt->bindParam(':limit', $params[':limit'], PDO::PARAM_INT);
-      $stmt->bindParam(':offset', $params[':offset'], PDO::PARAM_INT);
       
       $stmt->execute();
       return $stmt->fetchAll(PDO::FETCH_ASSOC);

@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Core\Request;
 use App\Models\Dispatcher;
+use App\Models\Patient;
 use App\Core\RateLimiter;
 use App\Core\Auth;
 use Exception;
@@ -240,6 +241,84 @@ class DispatcherController {
         'message' => 'Incident dispatched successfully'
       ]);
 
+    } catch (Exception $e) {
+      http_response_code(500);
+      return json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+    }
+  }
+
+  public function createPatient(Request $request) {
+    $apiKey = $this->getApiKey($request);
+
+    if (empty($apiKey)) {
+      http_response_code(401);
+      return json_encode(['error' => 'API key is required']);
+    }
+
+    if (!RateLimiter::check($apiKey)) {
+      http_response_code(429);
+      return json_encode(['error' => 'Rate limit exceeded. Try again later.']);
+    }
+
+    try {
+      $user = Dispatcher::findByApiKey($apiKey);
+
+      if (!$user) {
+        http_response_code(404);
+        return json_encode(['error' => 'User not found']);
+      }
+
+      if ($user['status'] !== 'active') {
+        http_response_code(403);
+        return json_encode(['error' => 'Account is not active']);
+      }
+
+      $input = json_decode(file_get_contents('php://input'), true);
+
+      if (json_last_error() !== JSON_ERROR_NONE) {
+        http_response_code(400);
+        return json_encode(['error' => 'Invalid JSON input']);
+      }
+
+      $fullName = isset($input['full_name']) ? trim((string)$input['full_name']) : '';
+      $reason = isset($input['reason']) ? trim((string)$input['reason']) : '';
+      $agencyId = isset($input['agency_id']) ? trim((string)$input['agency_id']) : '';
+
+      if ($fullName === '' || $reason === '' || $agencyId === '') {
+        http_response_code(400);
+        return json_encode(['error' => 'full_name, reason, and agency_id are required']);
+      }
+
+      $agency = Dispatcher::getAgencyById($agencyId);
+      if (!$agency) {
+        http_response_code(400);
+        return json_encode(['error' => 'Agency not found']);
+      }
+
+      // No FK from patients to agency in DB — validate agency exists here.
+      if (($agency['status'] ?? '') !== 'active') {
+        http_response_code(400);
+        return json_encode(['error' => 'Agency is not active']);
+      }
+
+      $patientId = 'PT' . date('Ymd') . str_pad((string)random_int(0, 999), 3, '0', STR_PAD_LEFT);
+
+      if (!Patient::insert($patientId, $fullName, $reason, $agencyId)) {
+        http_response_code(500);
+        return json_encode(['error' => 'Failed to create patient']);
+      }
+
+      return json_encode([
+        'success' => true,
+        'message' => 'Patient record created',
+        'data' => [
+          'patient_id' => $patientId,
+          'full_name' => $fullName,
+          'reason' => $reason,
+          'agency_id' => $agencyId,
+          'status' => 'ongoing',
+        ],
+      ]);
     } catch (Exception $e) {
       http_response_code(500);
       return json_encode(['error' => 'Server error: ' . $e->getMessage()]);
@@ -706,7 +785,7 @@ class DispatcherController {
       // Get incident map coordinates
       $incidentCoordinates = Dispatcher::getIncidentCoordinates($year, $startDate, $endDate, $activeTodayOnly);
 
-      return json_encode([
+      $payload = [
         'success' => true,
         'data' => [
           'stats' => $stats,
@@ -720,7 +799,18 @@ class DispatcherController {
           'end_date' => $endDate,
           'stats_scope' => $activeTodayOnly ? 'today' : 'all'
         ]
-      ]);
+      ];
+
+      $jsonFlags = JSON_UNESCAPED_UNICODE | (defined('JSON_INVALID_UTF8_SUBSTITUTE') ? JSON_INVALID_UTF8_SUBSTITUTE : 0);
+      $json = json_encode($payload, $jsonFlags);
+      if ($json === false) {
+        http_response_code(500);
+        return json_encode([
+          'success' => false,
+          'error' => 'Failed to encode dashboard JSON: ' . json_last_error_msg()
+        ]);
+      }
+      return $json;
 
     } catch (Exception $e) {
       http_response_code(500);
