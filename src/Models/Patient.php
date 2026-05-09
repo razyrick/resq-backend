@@ -102,6 +102,52 @@ class Patient {
     }
   }
 
+  public static function countAll(): int {
+    $db = Database::connect();
+
+    try {
+      $stmt = $db->query('SELECT COUNT(*) AS total FROM patients');
+      if ($stmt === false) {
+        return 0;
+      }
+      $row = $stmt->fetch(PDO::FETCH_ASSOC);
+      return (int) ($row['total'] ?? 0);
+    } catch (PDOException $e) {
+      error_log('Patient::countAll error: ' . $e->getMessage());
+      return 0;
+    }
+  }
+
+  public static function sampleDistinctAgencyIds(int $limit = 8): array {
+    $db = Database::connect();
+    $lim = max(1, min(50, (int) $limit));
+
+    try {
+      $sql = "
+        SELECT DISTINCT agency_id AS aid
+        FROM patients
+        WHERE agency_id IS NOT NULL AND TRIM(agency_id) <> ''
+        ORDER BY agency_id ASC
+        LIMIT {$lim}
+      ";
+      $stmt = $db->query($sql);
+      if ($stmt === false) {
+        return [];
+      }
+      $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+      $out = [];
+      foreach ($rows as $row) {
+        if (!empty($row['aid'])) {
+          $out[] = (string) $row['aid'];
+        }
+      }
+      return $out;
+    } catch (PDOException $e) {
+      error_log('Patient::sampleDistinctAgencyIds error: ' . $e->getMessage());
+      return [];
+    }
+  }
+
   public static function updateStatusForAgency(string $patientId, string $agencyId, string $status): bool {
     if ($status !== 'resolved') {
       return false;
