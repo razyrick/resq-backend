@@ -144,7 +144,8 @@ class User {
     
    $sql = "SELECT 
               i.incident_id, i.latitude, i.longitude, i.incident_type, 
-              i.severity_level, i.description, i.photo, i.status, i.created_at, i.updated_at,
+              i.severity_level, i.desacription, i.photo, i.status, i.created_at, i.updated_at,
+              i.resolution_photo, i.resolution_notes, i.resolved_at, i.resolved_by, i.resolved_by_role,
               i.baranggay_id,
               b.baranggay as baranggay_name,
               b.latitude as baranggay_latitude,

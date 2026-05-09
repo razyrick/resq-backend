@@ -703,6 +703,11 @@ class UserController {
           'status' => $incident['status'],
           'created_at' => $incident['created_at'],
           'updated_at' => $incident['updated_at'],
+          'resolution_photo' => $incident['resolution_photo'] ?? null,
+          'resolution_notes' => $incident['resolution_notes'] ?? null,
+          'resolved_at' => $incident['resolved_at'] ?? null,
+          'resolved_by' => $incident['resolved_by'] ?? null,
+          'resolved_by_role' => $incident['resolved_by_role'] ?? null,
           'baranggay' => [
             'baranggay_id' => $incident['baranggay_id'],
             'baranggay_name' => $incident['baranggay_name'],
@@ -712,12 +717,13 @@ class UserController {
             'updated_at' => $incident['baranggay_updated_at'],
           ],
           'agency' => [
-            'agency_name' => $incidents['agency'],
-            'agency_type' => $incidents['agency_type'],
-            'contact_person' => $incidents['contact_person'],
-            'phone_number' => $incidents['phone_number'],
-            'emal_address' => $incidents['email_address'],
-            'address' => $incidents['address'],
+            'agency_id' => $incident['agency_id'] ?? null,
+            'agency_name' => $incident['agency'] ?? null,
+            'agency_type' => $incident['agency_type'] ?? null,
+            'contact_person' => $incident['contact_person'] ?? null,
+            'phone_number' => $incident['phone_number'] ?? null,
+            'emal_address' => $incident['email_address'] ?? null,
+            'address' => $incident['address'] ?? null,
           ]
         ];
       }, $incidents);
@@ -805,7 +811,12 @@ class UserController {
           'photo' => $incident['photo'],
           'status' => $incident['status'],
           'created_at' => $incident['created_at'],
-          'updated_at' => $incident['updated_at']
+          'updated_at' => $incident['updated_at'],
+          'resolution_photo' => $incident['resolution_photo'] ?? null,
+          'resolution_notes' => $incident['resolution_notes'] ?? null,
+          'resolved_at' => $incident['resolved_at'] ?? null,
+          'resolved_by' => $incident['resolved_by'] ?? null,
+          'resolved_by_role' => $incident['resolved_by_role'] ?? null,
         ];
       }, $incidents);
 
