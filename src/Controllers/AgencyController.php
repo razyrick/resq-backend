@@ -650,9 +650,12 @@ class AgencyController {
 
       $resolutionExtras = [];
       if ($status === 'resolved') {
-        if (!empty($input['resolution_photo'])) {
-          $resolutionExtras['resolution_photo'] = trim($input['resolution_photo']);
+        $resolutionPhoto = isset($input['resolution_photo']) ? trim((string)$input['resolution_photo']) : '';
+        if ($resolutionPhoto === '') {
+          http_response_code(422);
+          return json_encode(['error' => 'A proof photo is required to resolve this incident']);
         }
+        $resolutionExtras['resolution_photo'] = $resolutionPhoto;
         if (isset($input['resolution_notes'])) {
           $resolutionExtras['resolution_notes'] = trim((string)$input['resolution_notes']);
         }

@@ -45,6 +45,8 @@ class Dispatcher {
               (i.dispatcher_id IS NOT NULL AND i.dispatcher_id != '' AND i.dispatcher_id != '0')
               OR i.status = 'dispatched'
               OR (i.agency_id IS NOT NULL AND i.agency_id != '' AND i.agency_id != '0')
+              OR (i.assign_id IS NOT NULL AND i.assign_id != '' AND i.assign_id != '0')
+              OR i.resolved_by_role = 'barangay'
             )";
     
     $params = [];
@@ -125,6 +127,8 @@ class Dispatcher {
               (i.dispatcher_id IS NOT NULL AND i.dispatcher_id != '' AND i.dispatcher_id != '0')
               OR i.status = 'dispatched'
               OR (i.agency_id IS NOT NULL AND i.agency_id != '' AND i.agency_id != '0')
+              OR (i.assign_id IS NOT NULL AND i.assign_id != '' AND i.assign_id != '0')
+              OR i.resolved_by_role = 'barangay'
             )";
     
     $params = [];

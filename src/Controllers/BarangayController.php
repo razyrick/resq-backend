@@ -531,12 +531,15 @@ class BarangayController {
         }
 
         if ($status === 'resolved') {
+          $resolutionPhoto = isset($input['resolution_photo']) ? trim((string)$input['resolution_photo']) : '';
+          if ($resolutionPhoto === '') {
+            http_response_code(422);
+            return json_encode(['error' => 'A proof photo is required to resolve this case']);
+          }
           $updateData['resolved_by'] = $user['user_id'];
           $updateData['resolved_by_role'] = 'barangay';
           $updateData['resolved_at'] = date('Y-m-d H:i:s');
-          if (!empty($input['resolution_photo'])) {
-            $updateData['resolution_photo'] = trim($input['resolution_photo']);
-          }
+          $updateData['resolution_photo'] = $resolutionPhoto;
           if (isset($input['resolution_notes'])) {
             $updateData['resolution_notes'] = trim((string)$input['resolution_notes']);
           }
