@@ -17,6 +17,31 @@ class AgencyController {
     return trim(str_replace('Bearer ', '', $authHeader));
   }
 
+  private function resolveAgencyIdForPatients(array $user): string {
+    $linked = trim((string) ($user['linked_agency_id'] ?? ''));
+    $stored = trim((string) ($user['agency_id'] ?? ''));
+    $candidates = [];
+    if ($linked !== '') {
+      $candidates[] = $linked;
+    }
+    if ($stored !== '' && !in_array($stored, $candidates, true)) {
+      $candidates[] = $stored;
+    }
+    $email = trim((string) ($user['email'] ?? ''));
+    if ($email !== '') {
+      $fromEmail = Agency::findAgencyIdByContactEmail($email);
+      if ($fromEmail !== null && $fromEmail !== '' && !in_array($fromEmail, $candidates, true)) {
+        $candidates[] = $fromEmail;
+      }
+    }
+    foreach ($candidates as $cid) {
+      if (Patient::countByAgency($cid, '', '') > 0) {
+        return $cid;
+      }
+    }
+    return $candidates[0] ?? '';
+  }
+
   // Profile
   public function getProfile(Request $request) {
     $apiKey = $this->getApiKey($request);
@@ -417,7 +442,7 @@ class AgencyController {
         return json_encode(['error' => 'Account is not active']);
       }
 
-      $agencyId = trim((string) ($user['agency_id'] ?? ''));
+      $agencyId = $this->resolveAgencyIdForPatients($user);
       if ($agencyId === '') {
         http_response_code(400);
         return json_encode(['error' => 'No agency is assigned to this account; patients cannot be listed.']);
@@ -443,6 +468,7 @@ class AgencyController {
       $allPatients = Patient::countAll();
       $meta = [
         'your_agency_id' => $agencyId,
+        'profile_agency_id' => trim((string) ($user['agency_id'] ?? '')),
         'patients_total_in_database' => $allPatients,
         'rows_matching_your_agency' => $total,
       ];
@@ -510,7 +536,7 @@ class AgencyController {
         return json_encode(['error' => 'Account is not active']);
       }
 
-      $agencyId = trim((string) ($user['agency_id'] ?? ''));
+      $agencyId = $this->resolveAgencyIdForPatients($user);
       if ($agencyId === '') {
         http_response_code(400);
         return json_encode(['error' => 'No agency is assigned to this account.']);

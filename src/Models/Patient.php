@@ -34,10 +34,9 @@ class Patient {
     $off = max(0, (int) $offset);
 
     $sql = "
-      SELECT p.*, a.agency AS agency_label
+      SELECT p.*
       FROM patients p
-      LEFT JOIN agency a ON p.agency_id = a.agency_id
-      WHERE p.agency_id = :agency_id
+      WHERE TRIM(COALESCE(p.agency_id, '')) = :agency_id
     ";
     $params = [':agency_id' => $agencyId];
 
@@ -54,7 +53,7 @@ class Patient {
       $params[':search3'] = $term;
     }
 
-    $sql .= " ORDER BY p.created_at DESC LIMIT {$lim} OFFSET {$off}";
+    $sql .= " ORDER BY p.created_at DESC, p.patient_id DESC LIMIT {$lim} OFFSET {$off}";
 
     try {
       $stmt = $db->prepare($sql);
@@ -72,7 +71,7 @@ class Patient {
   public static function countByAgency(string $agencyId, string $status = '', string $search = ''): int {
     $db = Database::connect();
 
-    $sql = "SELECT COUNT(*) AS total FROM patients p WHERE p.agency_id = :agency_id";
+    $sql = "SELECT COUNT(*) AS total FROM patients p WHERE TRIM(COALESCE(p.agency_id, '')) = :agency_id";
     $params = [':agency_id' => $agencyId];
 
     if ($status !== '') {
@@ -159,9 +158,9 @@ class Patient {
       $stmt = $db->prepare("
         UPDATE patients
         SET status = ?, updated_at = NOW()
-        WHERE patient_id = ? AND agency_id = ?
+        WHERE patient_id = ? AND TRIM(COALESCE(agency_id, '')) = ?
       ");
-      return $stmt->execute([$status, $patientId, $agencyId]);
+      return $stmt->execute([$status, $patientId, trim($agencyId)]);
     } catch (PDOException $e) {
       error_log('Patient::updateStatusForAgency error: ' . $e->getMessage());
       return false;
@@ -175,9 +174,9 @@ class Patient {
       $stmt = $db->prepare("
         SELECT patient_id, agency_id, status
         FROM patients
-        WHERE patient_id = ? AND agency_id = ?
+        WHERE patient_id = ? AND TRIM(COALESCE(agency_id, '')) = ?
       ");
-      $stmt->execute([$patientId, $agencyId]);
+      $stmt->execute([$patientId, trim($agencyId)]);
       $row = $stmt->fetch(PDO::FETCH_ASSOC);
       return $row ?: null;
     } catch (PDOException $e) {

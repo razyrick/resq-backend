@@ -10,12 +10,12 @@ class Agency {
   public static function findByApiKey(string $apiKey): ?array {
       $db = Database::connect();
       
-      $sql = "SELECT u.*, a.agency, a.agency_type, a.contact_person, a.phone_number as agency_phone, 
+      $sql = "SELECT u.*, a.agency_id AS linked_agency_id, a.agency, a.agency_type, a.contact_person, a.phone_number as agency_phone, 
                     a.email_address as agency_email, a.address as agency_address, 
                     a.number_of_units, a.status as agency_status, a.created_at as agency_created_at,
                     a.updated_at as agency_updated_at
               FROM users u 
-              LEFT JOIN agency a ON u.agency_id = a.agency_id 
+              LEFT JOIN agency a ON TRIM(COALESCE(u.agency_id, '')) = TRIM(COALESCE(a.agency_id, ''))
               WHERE u.api_key = :api_key AND u.role = 'agency' LIMIT 1";
       $stmt = $db->prepare($sql);
       $stmt->bindParam(':api_key', $apiKey);
@@ -28,12 +28,12 @@ class Agency {
   public static function findByEmail(string $email): ?array {
       $db = Database::connect();
       
-      $sql = "SELECT u.*, a.agency, a.agency_type, a.contact_person, a.phone_number as agency_phone, 
+      $sql = "SELECT u.*, a.agency_id AS linked_agency_id, a.agency, a.agency_type, a.contact_person, a.phone_number as agency_phone, 
                     a.email_address as agency_email, a.address as agency_address, 
                     a.number_of_units, a.status as agency_status, a.created_at as agency_created_at,
                     a.updated_at as agency_updated_at
               FROM users u 
-              LEFT JOIN agency a ON u.agency_id = a.agency_id 
+              LEFT JOIN agency a ON TRIM(COALESCE(u.agency_id, '')) = TRIM(COALESCE(a.agency_id, ''))
               WHERE u.email = :email AND u.role = 'agency' LIMIT 1";
       $stmt = $db->prepare($sql);
       $stmt->bindParam(':email', $email);
@@ -41,6 +41,31 @@ class Agency {
       
       $user = $stmt->fetch(PDO::FETCH_ASSOC);
       return $user ?: null;
+  }
+
+  public static function findAgencyIdByContactEmail(string $email): ?string {
+    $email = trim($email);
+    if ($email === '') {
+      return null;
+    }
+
+    $db = Database::connect();
+
+    try {
+      $stmt = $db->prepare(
+        'SELECT agency_id FROM agency WHERE LOWER(TRIM(email_address)) = LOWER(?) LIMIT 1'
+      );
+      $stmt->execute([$email]);
+      $row = $stmt->fetch(PDO::FETCH_ASSOC);
+      if (!$row || !isset($row['agency_id'])) {
+        return null;
+      }
+      $id = trim((string) $row['agency_id']);
+      return $id !== '' ? $id : null;
+    } catch (PDOException $e) {
+      error_log('Agency::findAgencyIdByContactEmail error: ' . $e->getMessage());
+      return null;
+    }
   }
 
   public static function updateUserProfile(string $userId, array $updateData): bool {
