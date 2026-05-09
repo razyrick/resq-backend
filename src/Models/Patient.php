@@ -61,11 +61,65 @@ class Patient {
         $stmt->bindValue($k, $v);
       }
       $stmt->execute();
-      return $stmt->fetchAll(PDO::FETCH_ASSOC);
+      return self::attachIncidentLinks($db, $stmt->fetchAll(PDO::FETCH_ASSOC));
     } catch (PDOException $e) {
       error_log('Patient::getByAgency error: ' . $e->getMessage());
       return [];
     }
+  }
+
+  private static function attachIncidentLinks(PDO $db, array $rows): array {
+    if (empty($rows)) {
+      return $rows;
+    }
+
+    $patientIds = [];
+    foreach ($rows as $row) {
+      $patientId = trim((string) ($row['patient_id'] ?? ''));
+      if ($patientId !== '') {
+        $patientIds[] = $patientId;
+      }
+    }
+    $patientIds = array_values(array_unique($patientIds));
+    if (empty($patientIds)) {
+      return $rows;
+    }
+
+    try {
+      $placeholders = implode(',', array_fill(0, count($patientIds), '?'));
+      $stmt = $db->prepare("
+        SELECT patient_id, incident_id, incident_type, status, severity_level, created_at
+        FROM incidents
+        WHERE patient_id IN ($placeholders)
+        ORDER BY created_at DESC
+      ");
+      $stmt->execute($patientIds);
+      $links = [];
+      foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $incident) {
+        $linkedPatientId = (string) ($incident['patient_id'] ?? '');
+        if ($linkedPatientId !== '' && !isset($links[$linkedPatientId])) {
+          $links[$linkedPatientId] = $incident;
+        }
+      }
+
+      foreach ($rows as &$row) {
+        $patientId = (string) ($row['patient_id'] ?? '');
+        if (!isset($links[$patientId])) {
+          continue;
+        }
+        $incident = $links[$patientId];
+        $row['linked_incident_id'] = $incident['incident_id'] ?? null;
+        $row['linked_incident_type'] = $incident['incident_type'] ?? null;
+        $row['linked_incident_status'] = $incident['status'] ?? null;
+        $row['linked_incident_severity'] = $incident['severity_level'] ?? null;
+        $row['linked_incident_created_at'] = $incident['created_at'] ?? null;
+      }
+      unset($row);
+    } catch (PDOException $e) {
+      error_log('Patient::attachIncidentLinks error: ' . $e->getMessage());
+    }
+
+    return $rows;
   }
 
   public static function countByAgency(string $agencyId, string $status = '', string $search = ''): int {

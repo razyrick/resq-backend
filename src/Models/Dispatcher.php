@@ -31,10 +31,16 @@ class Dispatcher {
               u.phone,
               u.email,
               u.user_id,
-              b.baranggay
+              b.baranggay,
+              p.patient_id AS linked_patient_id,
+              p.full_name AS linked_patient_name,
+              p.reason AS linked_patient_reason,
+              p.status AS linked_patient_status,
+              p.created_at AS linked_patient_created_at
             FROM incidents i
             LEFT JOIN users u ON i.user_id = u.user_id
             LEFT JOIN baranggay b ON i.baranggay_id = b.baranggay_id
+            LEFT JOIN patients p ON i.patient_id IS NOT NULL AND i.patient_id = p.patient_id
             WHERE (
               (i.dispatcher_id IS NOT NULL AND i.dispatcher_id != '' AND i.dispatcher_id != '0')
               OR i.status = 'dispatched'
@@ -185,10 +191,23 @@ class Dispatcher {
     $db = Database::connect();
     
     $stmt = $db->prepare("
-      SELECT i.*, u.email, u.first_name, u.middle_name, u.last_name, u.phone,b.baranggay
+      SELECT
+        i.*,
+        u.email,
+        u.first_name,
+        u.middle_name,
+        u.last_name,
+        u.phone,
+        b.baranggay,
+        p.patient_id AS linked_patient_id,
+        p.full_name AS linked_patient_name,
+        p.reason AS linked_patient_reason,
+        p.status AS linked_patient_status,
+        p.created_at AS linked_patient_created_at
       FROM incidents i 
       LEFT JOIN baranggay b ON i.baranggay_id = b.baranggay_id 
       LEFT JOIN users u ON i.user_id = u.user_id
+      LEFT JOIN patients p ON i.patient_id IS NOT NULL AND i.patient_id = p.patient_id
       WHERE i.incident_id = ?
     ");
     $stmt->execute([$incidentId]);
@@ -210,6 +229,22 @@ class Dispatcher {
     ");
     
     return $stmt->execute([$status, $dispatcherId, $agencyId, $incidentId]);
+  }
+
+  public static function linkPatientToIncident(string $incidentId, string $patientId): bool {
+    $db = Database::connect();
+
+    try {
+      $stmt = $db->prepare("
+        UPDATE incidents
+        SET patient_id = ?, updated_at = NOW()
+        WHERE incident_id = ?
+      ");
+      return $stmt->execute([$patientId, $incidentId]);
+    } catch (PDOException $e) {
+      error_log('Dispatcher::linkPatientToIncident error: ' . $e->getMessage());
+      return false;
+    }
   }
 
   // Agency

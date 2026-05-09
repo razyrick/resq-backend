@@ -283,10 +283,17 @@ class DispatcherController {
       $fullName = isset($input['full_name']) ? trim((string)$input['full_name']) : '';
       $reason = isset($input['reason']) ? trim((string)$input['reason']) : '';
       $agencyId = isset($input['agency_id']) ? trim((string)$input['agency_id']) : '';
+      $incidentId = isset($input['incident_id']) ? trim((string)$input['incident_id']) : '';
+      $incidentId = $incidentId === '' ? null : $incidentId;
 
       if ($fullName === '' || $reason === '' || $agencyId === '') {
         http_response_code(400);
         return json_encode(['error' => 'full_name, reason, and agency_id are required']);
+      }
+
+      if ($incidentId !== null && !Dispatcher::getIncidentById($incidentId)) {
+        http_response_code(400);
+        return json_encode(['error' => 'Incident not found']);
       }
 
       $agency = Dispatcher::getAgencyById($agencyId);
@@ -308,6 +315,11 @@ class DispatcherController {
         return json_encode(['error' => 'Failed to create patient']);
       }
 
+      if ($incidentId !== null && !Dispatcher::linkPatientToIncident($incidentId, $patientId)) {
+        http_response_code(500);
+        return json_encode(['error' => 'Patient created, but failed to link it to the incident']);
+      }
+
       return json_encode([
         'success' => true,
         'message' => 'Patient record created',
@@ -316,6 +328,7 @@ class DispatcherController {
           'full_name' => $fullName,
           'reason' => $reason,
           'agency_id' => $agencyId,
+          'incident_id' => $incidentId,
           'status' => 'ongoing',
         ],
       ]);

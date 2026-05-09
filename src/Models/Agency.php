@@ -210,10 +210,16 @@ class Agency {
               u.phone,
               u.email,
               u.user_id,
-              b.baranggay
+              b.baranggay,
+              p.patient_id AS linked_patient_id,
+              p.full_name AS linked_patient_name,
+              p.reason AS linked_patient_reason,
+              p.status AS linked_patient_status,
+              p.created_at AS linked_patient_created_at
             FROM incidents i
             LEFT JOIN users u ON i.user_id = u.user_id
             LEFT JOIN baranggay b ON i.baranggay_id = b.baranggay_id
+            LEFT JOIN patients p ON i.patient_id IS NOT NULL AND i.patient_id = p.patient_id
             WHERE i.agency_id = :agency_id";
     
     $params = [':agency_id' => $agencyId];
