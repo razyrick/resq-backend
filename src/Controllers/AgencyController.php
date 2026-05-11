@@ -557,9 +557,9 @@ class AgencyController {
         return json_encode(['error' => 'patient_id and status are required']);
       }
 
-      if ($status !== 'resolved') {
+      if ($status !== 'arrived' && $status !== 'resolved') {
         http_response_code(400);
-        return json_encode(['error' => 'status must be resolved']);
+        return json_encode(['error' => 'status must be arrived or resolved']);
       }
 
       $existing = Patient::getRowForAgency($patientId, $agencyId);
@@ -568,14 +568,19 @@ class AgencyController {
         return json_encode(['error' => 'Patient not found']);
       }
 
-      if (($existing['status'] ?? '') !== 'ongoing') {
+      $current = (string) ($existing['status'] ?? '');
+      if ($status === 'arrived' && $current !== 'incoming') {
         http_response_code(400);
-        return json_encode(['error' => 'Only ongoing patients can be resolved']);
+        return json_encode(['error' => 'Only incoming patients can be marked arrived']);
+      }
+      if ($status === 'resolved' && $current !== 'arrived' && $current !== 'ongoing') {
+        http_response_code(400);
+        return json_encode(['error' => 'Resolve is only allowed after arrival, or for legacy ongoing patients']);
       }
 
       if (!Patient::updateStatusForAgency($patientId, $agencyId, $status)) {
-        http_response_code(500);
-        return json_encode(['error' => 'Failed to update patient']);
+        http_response_code(400);
+        return json_encode(['error' => 'Could not apply status change (invalid transition or no row updated)']);
       }
 
       return json_encode([

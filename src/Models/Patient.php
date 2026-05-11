@@ -6,15 +6,26 @@ use PDO;
 use PDOException;
 
 class Patient {
-  public static function insert(string $patientId, string $fullName, string $reason, string $agencyId): bool {
+  public static function insert(
+    string $patientId,
+    string $fullName,
+    string $reason,
+    string $agencyId,
+    string $status = 'ongoing'
+  ): bool {
+    $allowed = ['ongoing', 'incoming'];
+    if (!in_array($status, $allowed, true)) {
+      $status = 'ongoing';
+    }
+
     $db = Database::connect();
 
     try {
       $stmt = $db->prepare("
         INSERT INTO patients (patient_id, full_name, reason, agency_id, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'ongoing', NOW(), NOW())
+        VALUES (?, ?, ?, ?, ?, NOW(), NOW())
       ");
-      return $stmt->execute([$patientId, $fullName, $reason, $agencyId]);
+      return $stmt->execute([$patientId, $fullName, $reason, $agencyId, $status]);
     } catch (PDOException $e) {
       error_log('Patient::insert error: ' . $e->getMessage());
       return false;
@@ -201,20 +212,37 @@ class Patient {
     }
   }
 
-  public static function updateStatusForAgency(string $patientId, string $agencyId, string $status): bool {
-    if ($status !== 'resolved') {
+  /**
+   * Agency-only transitions: incoming → arrived; arrived|ongoing → resolved.
+   * Returns true when a row was updated (invalid transition updates 0 rows).
+   */
+  public static function updateStatusForAgency(string $patientId, string $agencyId, string $newStatus): bool {
+    if ($newStatus === 'arrived') {
+      $sql = "
+        UPDATE patients
+        SET status = 'arrived', updated_at = NOW()
+        WHERE patient_id = ?
+          AND TRIM(COALESCE(agency_id, '')) = ?
+          AND status = 'incoming'
+      ";
+    } elseif ($newStatus === 'resolved') {
+      $sql = "
+        UPDATE patients
+        SET status = 'resolved', updated_at = NOW()
+        WHERE patient_id = ?
+          AND TRIM(COALESCE(agency_id, '')) = ?
+          AND status IN ('arrived', 'ongoing')
+      ";
+    } else {
       return false;
     }
 
     $db = Database::connect();
 
     try {
-      $stmt = $db->prepare("
-        UPDATE patients
-        SET status = ?, updated_at = NOW()
-        WHERE patient_id = ? AND TRIM(COALESCE(agency_id, '')) = ?
-      ");
-      return $stmt->execute([$status, $patientId, trim($agencyId)]);
+      $stmt = $db->prepare($sql);
+      $stmt->execute([$patientId, trim($agencyId)]);
+      return $stmt->rowCount() > 0;
     } catch (PDOException $e) {
       error_log('Patient::updateStatusForAgency error: ' . $e->getMessage());
       return false;

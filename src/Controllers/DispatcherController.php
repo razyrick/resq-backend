@@ -310,7 +310,7 @@ class DispatcherController {
 
       $patientId = 'PT' . date('Ymd') . str_pad((string)random_int(0, 999), 3, '0', STR_PAD_LEFT);
 
-      if (!Patient::insert($patientId, $fullName, $reason, $agencyId)) {
+      if (!Patient::insert($patientId, $fullName, $reason, $agencyId, 'incoming')) {
         http_response_code(500);
         return json_encode(['error' => 'Failed to create patient']);
       }
@@ -329,7 +329,7 @@ class DispatcherController {
           'reason' => $reason,
           'agency_id' => $agencyId,
           'incident_id' => $incidentId,
-          'status' => 'ongoing',
+          'status' => 'incoming',
         ],
       ]);
     } catch (Exception $e) {

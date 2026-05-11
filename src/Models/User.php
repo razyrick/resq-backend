@@ -147,6 +147,8 @@ class User {
               i.severity_level, i.description, i.photo, i.status, i.created_at, i.updated_at,
               i.resolution_photo, i.resolution_notes, i.resolved_at, i.resolved_by, i.resolved_by_role,
               i.baranggay_id,
+              i.dispatcher_id,
+              TRIM(CONCAT(COALESCE(du.first_name,''), ' ', COALESCE(du.last_name,''))) AS dispatcher_display_name,
               b.baranggay as baranggay_name,
               b.latitude as baranggay_latitude,
               b.longitude as baranggay_longitude,
@@ -162,6 +164,7 @@ class User {
             FROM incidents i
             LEFT JOIN baranggay b ON i.baranggay_id = b.baranggay_id
             LEFT JOIN agency a ON i.agency_id = a.agency_id
+            LEFT JOIN users du ON du.user_id = i.dispatcher_id AND du.role = 'dispatcher'
             WHERE i.user_id = :user_id 
             ORDER BY i.created_at DESC 
             LIMIT :limit OFFSET :offset";
@@ -218,6 +221,8 @@ class User {
               i.severity_level, i.description, i.photo, i.status, i.created_at, i.updated_at,
               i.resolution_photo, i.resolution_notes, i.resolved_at, i.resolved_by, i.resolved_by_role,
               i.baranggay_id,
+              i.dispatcher_id,
+              TRIM(CONCAT(COALESCE(du.first_name,''), ' ', COALESCE(du.last_name,''))) AS dispatcher_display_name,
               b.baranggay as baranggay_name,
               b.latitude as baranggay_latitude,
               b.longitude as baranggay_longitude,
@@ -233,6 +238,7 @@ class User {
             FROM incidents i
             LEFT JOIN baranggay b ON i.baranggay_id = b.baranggay_id
             LEFT JOIN agency a ON i.agency_id = a.agency_id
+            LEFT JOIN users du ON du.user_id = i.dispatcher_id AND du.role = 'dispatcher'
             WHERE i.baranggay_id = :barangay_id
             ORDER BY i.created_at DESC
             LIMIT :limit OFFSET :offset";

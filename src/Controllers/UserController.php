@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Core\Request;
 use App\Models\User;
+use App\Models\Barangay;
 use App\Core\RateLimiter;
 use App\Core\Auth;
 use App\Services\NotificationService;
@@ -24,9 +25,60 @@ class UserController {
   }
 
   /**
+   * Human-readable routing handoff from current incident fields (no separate audit log).
+   */
+  private function buildIncidentRoutingSteps(array $incident): array {
+    $steps = [];
+    $brgy = trim((string)($incident['baranggay_name'] ?? ''));
+    if ($brgy !== '') {
+      $steps[] = [
+        'title' => 'Routed to barangay',
+        'detail' => 'Your report was sent to ' . $brgy . ' first so local responders can review it.',
+      ];
+    }
+
+    $dispatcherId = trim((string)($incident['dispatcher_id'] ?? ''));
+    if ($dispatcherId !== '' && $dispatcherId !== '0') {
+      if (Barangay::isDispatcherEscalationPlaceholder($dispatcherId)) {
+        $steps[] = [
+          'title' => 'Escalated to city / municipal dispatch',
+          'detail' => 'The barangay forwarded this case to the central dispatch queue for wider coordination.',
+        ];
+      } else {
+        $name = trim((string)($incident['dispatcher_display_name'] ?? ''));
+        $detail = $name !== ''
+          ? 'Dispatcher coordinating routing: ' . $name . '.'
+          : 'A dispatcher is coordinating how this report is handled.';
+        $steps[] = [
+          'title' => 'Dispatcher coordination',
+          'detail' => $detail,
+        ];
+      }
+    }
+
+    $agencyName = trim((string)($incident['agency'] ?? ''));
+    if ($agencyName !== '') {
+      $type = trim((string)($incident['agency_type'] ?? ''));
+      $suffix = $type !== '' ? (' (' . $type . ')') : '';
+      $steps[] = [
+        'title' => 'Response agency assigned',
+        'detail' => 'Dispatch assigned this report to ' . $agencyName . $suffix . '.',
+      ];
+    }
+
+    return $steps;
+  }
+
+  /**
    * Normalizes incident rows (from user-scoped or barangay-scoped listings) for client apps.
    */
   private function formatIncidentForClient(array $incident): array {
+    $dispatcherId = trim((string)($incident['dispatcher_id'] ?? ''));
+    $dispatcherName = trim((string)($incident['dispatcher_display_name'] ?? ''));
+    if (Barangay::isDispatcherEscalationPlaceholder($dispatcherId)) {
+      $dispatcherName = '';
+    }
+
     return [
       'incident_id' => $incident['incident_id'],
       'latitude' => $incident['latitude'],
@@ -59,7 +111,13 @@ class UserController {
         'phone_number' => $incident['phone_number'] ?? null,
         'emal_address' => $incident['email_address'] ?? null,
         'address' => $incident['address'] ?? null,
-      ]
+      ],
+      'dispatcher' => [
+        'dispatcher_id' => ($dispatcherId === '' || $dispatcherId === '0') ? null : $incident['dispatcher_id'],
+        'name' => $dispatcherName !== '' ? $dispatcherName : null,
+        'escalation_queue' => Barangay::isDispatcherEscalationPlaceholder($dispatcherId),
+      ],
+      'routing_steps' => $this->buildIncidentRoutingSteps($incident),
     ];
   }
 
