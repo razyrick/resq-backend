@@ -144,7 +144,7 @@ class User {
     
    $sql = "SELECT 
               i.incident_id, i.latitude, i.longitude, i.incident_type, 
-              i.severity_level, i.desacription, i.photo, i.status, i.created_at, i.updated_at,
+              i.severity_level, i.description, i.photo, i.status, i.created_at, i.updated_at,
               i.resolution_photo, i.resolution_notes, i.resolved_at, i.resolved_by, i.resolved_by_role,
               i.baranggay_id,
               b.baranggay as baranggay_name,
@@ -213,9 +213,28 @@ class User {
   public static function getIncidentsByBarangay($barangayId, $limit = 10, $offset = 0) {
     $db = Database::connect();
     
-    $sql = "SELECT * FROM incidents 
-            WHERE baranggay_id = :barangay_id
-            ORDER BY created_at DESC
+    $sql = "SELECT 
+              i.incident_id, i.latitude, i.longitude, i.incident_type, 
+              i.severity_level, i.description, i.photo, i.status, i.created_at, i.updated_at,
+              i.resolution_photo, i.resolution_notes, i.resolved_at, i.resolved_by, i.resolved_by_role,
+              i.baranggay_id,
+              b.baranggay as baranggay_name,
+              b.latitude as baranggay_latitude,
+              b.longitude as baranggay_longitude,
+              b.created_at as baranggay_created_at,
+              b.updated_at as baranggay_updated_at,
+              a.agency_id,
+              a.agency,
+              a.agency_type,
+              a.contact_person,
+              a.phone_number,
+              a.email_address,
+              a.address
+            FROM incidents i
+            LEFT JOIN baranggay b ON i.baranggay_id = b.baranggay_id
+            LEFT JOIN agency a ON i.agency_id = a.agency_id
+            WHERE i.baranggay_id = :barangay_id
+            ORDER BY i.created_at DESC
             LIMIT :limit OFFSET :offset";
     
     $stmt = $db->prepare($sql);

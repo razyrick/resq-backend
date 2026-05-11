@@ -23,6 +23,46 @@ class UserController {
     return trim(str_replace('Bearer ', '', $authHeader));
   }
 
+  /**
+   * Normalizes incident rows (from user-scoped or barangay-scoped listings) for client apps.
+   */
+  private function formatIncidentForClient(array $incident): array {
+    return [
+      'incident_id' => $incident['incident_id'],
+      'latitude' => $incident['latitude'],
+      'longitude' => $incident['longitude'],
+      'incident_type' => $incident['incident_type'],
+      'severity_level' => $incident['severity_level'],
+      'description' => $incident['description'],
+      'photo' => $incident['photo'],
+      'status' => $incident['status'],
+      'created_at' => $incident['created_at'],
+      'updated_at' => $incident['updated_at'],
+      'resolution_photo' => $incident['resolution_photo'] ?? null,
+      'resolution_notes' => $incident['resolution_notes'] ?? null,
+      'resolved_at' => $incident['resolved_at'] ?? null,
+      'resolved_by' => $incident['resolved_by'] ?? null,
+      'resolved_by_role' => $incident['resolved_by_role'] ?? null,
+      'baranggay' => [
+        'baranggay_id' => $incident['baranggay_id'],
+        'baranggay_name' => $incident['baranggay_name'],
+        'latitude' => $incident['baranggay_latitude'],
+        'longitude' => $incident['baranggay_longitude'],
+        'created_at' => $incident['baranggay_created_at'],
+        'updated_at' => $incident['baranggay_updated_at'],
+      ],
+      'agency' => [
+        'agency_id' => $incident['agency_id'] ?? null,
+        'agency_name' => $incident['agency'] ?? null,
+        'agency_type' => $incident['agency_type'] ?? null,
+        'contact_person' => $incident['contact_person'] ?? null,
+        'phone_number' => $incident['phone_number'] ?? null,
+        'emal_address' => $incident['email_address'] ?? null,
+        'address' => $incident['address'] ?? null,
+      ]
+    ];
+  }
+
   // Profile
   public function getProfile(Request $request) {
     $apiKey = $this->getApiKey($request);
@@ -690,42 +730,8 @@ class UserController {
       $incidents = User::getIncidentsByUser($user['user_id'], $limit, $offset);
       $totalIncidents = User::getTotalIncidentsByUser($user['user_id']);
 
-      // Format the incidents data to include barangay information
-      $formattedIncidents = array_map(function($incident) {
-        return [
-          'incident_id' => $incident['incident_id'],
-          'latitude' => $incident['latitude'],
-          'longitude' => $incident['longitude'],
-          'incident_type' => $incident['incident_type'],
-          'severity_level' => $incident['severity_level'],
-          'description' => $incident['description'],
-          'photo' => $incident['photo'],
-          'status' => $incident['status'],
-          'created_at' => $incident['created_at'],
-          'updated_at' => $incident['updated_at'],
-          'resolution_photo' => $incident['resolution_photo'] ?? null,
-          'resolution_notes' => $incident['resolution_notes'] ?? null,
-          'resolved_at' => $incident['resolved_at'] ?? null,
-          'resolved_by' => $incident['resolved_by'] ?? null,
-          'resolved_by_role' => $incident['resolved_by_role'] ?? null,
-          'baranggay' => [
-            'baranggay_id' => $incident['baranggay_id'],
-            'baranggay_name' => $incident['baranggay_name'],
-            'latitude' => $incident['baranggay_latitude'],
-            'longitude' => $incident['baranggay_longitude'],
-            'created_at' => $incident['baranggay_created_at'],
-            'updated_at' => $incident['baranggay_updated_at'],
-          ],
-          'agency' => [
-            'agency_id' => $incident['agency_id'] ?? null,
-            'agency_name' => $incident['agency'] ?? null,
-            'agency_type' => $incident['agency_type'] ?? null,
-            'contact_person' => $incident['contact_person'] ?? null,
-            'phone_number' => $incident['phone_number'] ?? null,
-            'emal_address' => $incident['email_address'] ?? null,
-            'address' => $incident['address'] ?? null,
-          ]
-        ];
+      $formattedIncidents = array_map(function ($incident) {
+        return $this->formatIncidentForClient($incident);
       }, $incidents);
 
       // Calculate total pages
@@ -799,25 +805,8 @@ class UserController {
       $incidents = User::getIncidentsByBarangay($user['baranggay_id'], $limit, $offset);
       $totalIncidents = User::getTotalIncidentsByBarangay($user['baranggay_id']);
 
-      // Format the incidents data to include barangay information
-      $formattedIncidents = array_map(function($incident) {
-        return [
-          'incident_id' => $incident['incident_id'],
-          'latitude' => $incident['latitude'],
-          'longitude' => $incident['longitude'],
-          'incident_type' => $incident['incident_type'],
-          'severity_level' => $incident['severity_level'],
-          'description' => $incident['description'],
-          'photo' => $incident['photo'],
-          'status' => $incident['status'],
-          'created_at' => $incident['created_at'],
-          'updated_at' => $incident['updated_at'],
-          'resolution_photo' => $incident['resolution_photo'] ?? null,
-          'resolution_notes' => $incident['resolution_notes'] ?? null,
-          'resolved_at' => $incident['resolved_at'] ?? null,
-          'resolved_by' => $incident['resolved_by'] ?? null,
-          'resolved_by_role' => $incident['resolved_by_role'] ?? null,
-        ];
+      $formattedIncidents = array_map(function ($incident) {
+        return $this->formatIncidentForClient($incident);
       }, $incidents);
 
       // Calculate total pages
