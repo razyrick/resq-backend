@@ -266,4 +266,72 @@ class Patient {
       return null;
     }
   }
+
+  /**
+   * Move patient to another agency (status reset to incoming for the receiver).
+   * Also updates incidents linked by patient_id that are still assigned to $fromAgencyId.
+   *
+   * @return array{ok: bool, incidents_updated: int, error?: string}
+   */
+  public static function transferPatientToAgency(
+    string $patientId,
+    string $fromAgencyId,
+    string $toAgencyId
+  ): array {
+    $from = trim($fromAgencyId);
+    $to = trim($toAgencyId);
+    if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
+      return ['ok' => false, 'incidents_updated' => 0, 'error' => 'invalid_agencies'];
+    }
+
+    $db = Database::connect();
+
+    try {
+      $db->beginTransaction();
+
+      $stmt = $db->prepare("
+        UPDATE patients
+        SET agency_id = ?, status = 'incoming', updated_at = NOW()
+        WHERE patient_id = ?
+          AND TRIM(COALESCE(agency_id, '')) = ?
+          AND status IN ('incoming', 'arrived')
+      ");
+      $stmt->execute([$to, $patientId, $from]);
+      if ($stmt->rowCount() < 1) {
+        $db->rollBack();
+        return ['ok' => false, 'incidents_updated' => 0, 'error' => 'patient_not_transferable'];
+      }
+
+      $stmtInc = $db->prepare("
+        UPDATE incidents
+        SET agency_id = ?, updated_at = NOW()
+        WHERE patient_id = ?
+          AND TRIM(COALESCE(agency_id, '')) = ?
+      ");
+      $stmtInc->execute([$to, $patientId, $from]);
+      $incidentsUpdated = (int) $stmtInc->rowCount();
+
+      if ($incidentsUpdated === 0) {
+        $stmtFallback = $db->prepare("
+          UPDATE incidents
+          SET agency_id = ?, updated_at = NOW()
+          WHERE patient_id = ?
+            AND (status IS NULL OR status <> 'resolved')
+          ORDER BY created_at DESC
+          LIMIT 1
+        ");
+        $stmtFallback->execute([$to, $patientId]);
+        $incidentsUpdated = (int) $stmtFallback->rowCount();
+      }
+
+      $db->commit();
+      return ['ok' => true, 'incidents_updated' => $incidentsUpdated];
+    } catch (PDOException $e) {
+      if ($db->inTransaction()) {
+        $db->rollBack();
+      }
+      error_log('Patient::transferPatientToAgency error: ' . $e->getMessage());
+      return ['ok' => false, 'incidents_updated' => 0, 'error' => 'database'];
+    }
+  }
 }

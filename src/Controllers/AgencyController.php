@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Core\Request;
 use App\Models\Agency;
+use App\Models\Dispatcher;
 use App\Models\Patient;
 use App\Core\RateLimiter;
 use App\Core\Auth;
@@ -589,6 +590,118 @@ class AgencyController {
         'data' => [
           'patient_id' => $patientId,
           'status' => $status,
+        ],
+      ]);
+    } catch (Exception $e) {
+      http_response_code(500);
+      return json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+    }
+  }
+
+  public function transferPatient(Request $request) {
+    $apiKey = $this->getApiKey($request);
+
+    if (empty($apiKey)) {
+      http_response_code(401);
+      return json_encode(['error' => 'API key is required']);
+    }
+
+    if (!RateLimiter::check($apiKey)) {
+      http_response_code(429);
+      return json_encode(['error' => 'Rate limit exceeded. Try again later.']);
+    }
+
+    $csrfToken = $request->getHeader('X-CSRF-Token');
+    if (empty($csrfToken)) {
+      http_response_code(403);
+      return json_encode(['error' => 'CSRF token is required']);
+    }
+
+    try {
+      $user = Agency::findByApiKey($apiKey);
+
+      if (!$user) {
+        http_response_code(404);
+        return json_encode(['error' => 'User not found']);
+      }
+
+      if ($user['csrf_token'] !== $csrfToken) {
+        http_response_code(403);
+        return json_encode(['error' => 'Invalid CSRF token']);
+      }
+
+      if ($user['status'] !== 'active') {
+        http_response_code(403);
+        return json_encode(['error' => 'Account is not active']);
+      }
+
+      $fromAgencyId = $this->resolveAgencyIdForPatients($user);
+      if ($fromAgencyId === '') {
+        http_response_code(400);
+        return json_encode(['error' => 'No agency is assigned to this account.']);
+      }
+
+      $input = json_decode(file_get_contents('php://input'), true);
+
+      if (json_last_error() !== JSON_ERROR_NONE) {
+        http_response_code(400);
+        return json_encode(['error' => 'Invalid JSON input']);
+      }
+
+      $patientId = isset($input['patient_id']) ? trim((string) $input['patient_id']) : '';
+      $toAgencyId = isset($input['target_agency_id']) ? trim((string) $input['target_agency_id']) : '';
+
+      if ($patientId === '' || $toAgencyId === '') {
+        http_response_code(400);
+        return json_encode(['error' => 'patient_id and target_agency_id are required']);
+      }
+
+      if (strcasecmp(trim($fromAgencyId), $toAgencyId) === 0) {
+        http_response_code(400);
+        return json_encode(['error' => 'Cannot transfer to the same agency']);
+      }
+
+      $existing = Patient::getRowForAgency($patientId, $fromAgencyId);
+      if (!$existing) {
+        http_response_code(404);
+        return json_encode(['error' => 'Patient not found']);
+      }
+
+      $current = (string) ($existing['status'] ?? '');
+      if ($current !== 'incoming' && $current !== 'arrived') {
+        http_response_code(400);
+        return json_encode(['error' => 'Transfer is only allowed for incoming or arrived patients']);
+      }
+
+      $targetAgency = Dispatcher::getAgencyById($toAgencyId);
+      if (!$targetAgency) {
+        http_response_code(400);
+        return json_encode(['error' => 'Target agency not found']);
+      }
+
+      if (($targetAgency['status'] ?? '') !== 'active') {
+        http_response_code(400);
+        return json_encode(['error' => 'Target agency is not active']);
+      }
+
+      $result = Patient::transferPatientToAgency($patientId, $fromAgencyId, $toAgencyId);
+      if (!$result['ok']) {
+        $code = ($result['error'] ?? '') === 'patient_not_transferable' ? 400 : 500;
+        http_response_code($code);
+        $msg = $result['error'] === 'patient_not_transferable'
+          ? 'Patient could not be transferred (check status and ownership)'
+          : 'Failed to transfer patient';
+        return json_encode(['error' => $msg]);
+      }
+
+      return json_encode([
+        'success' => true,
+        'message' => 'Patient transferred; linked incidents assigned to this agency were moved when they matched your agency.',
+        'data' => [
+          'patient_id' => $patientId,
+          'agency_id' => $toAgencyId,
+          'status' => 'incoming',
+          'incidents_updated' => $result['incidents_updated'],
         ],
       ]);
     } catch (Exception $e) {

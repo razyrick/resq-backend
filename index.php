@@ -89,6 +89,7 @@ $router->get('/agency/reports', [App\Controllers\AgencyController::class, 'getIn
 $router->put('/agency/reports', [App\Controllers\AgencyController::class, 'updateIncidentStatus']);
 $router->get('/agency/patients', [App\Controllers\AgencyController::class, 'getPatients']);
 $router->put('/agency/patients', [App\Controllers\AgencyController::class, 'updatePatientStatus']);
+$router->post('/agency/patients/transfer', [App\Controllers\AgencyController::class, 'transferPatient']);
 $router->get('/agency/dashboard', [App\Controllers\AgencyController::class, 'getDashboardStats']);
 // ====== AGENCY END ====== //
 
